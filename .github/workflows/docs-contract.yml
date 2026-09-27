@@ -1,0 +1,21 @@
+name: docs-contract
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test deps
+        run: python3 -m pip install -r requirements-dev.txt
+      - name: Decision ledger + docs contract
+        run: python3 -m pytest tests/ -q --cov=. --cov-report=term-missing --cov-fail-under=80
+      - name: Standalone checker (the entry point SKiDL tooling calls)
+        run: python3 tools/check_decisions.py
