@@ -1,0 +1,21 @@
+# KiCad
+*.kicad_prl
+*.kicad_pcb-bak
+*-backups/
+*.bak
+*.kicad_sch-bak
+fp-info-cache
+_autosave-*
+*.lck
+*.hotkeys
+*.dsn
+*.ses
+
+# Fab scratch
+fab/*.zip
+!fab/.gitkeep
+
+# SKiDL scratch
+*.net
+*.log
+__pycache__/
