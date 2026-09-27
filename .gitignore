@@ -19,3 +19,8 @@ fab/*.zip
 *.net
 *.log
 __pycache__/
+
+# Python test scratch
+.coverage
+.pytest_cache/
+*.pyc

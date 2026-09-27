@@ -1,0 +1,98 @@
+{
+  "schema": "car-tollgate-hardware/decisions@1",
+  "card": "t_eaba2c97",
+  "ratified_at": "2026-09-27",
+  "ratified_by": "manager profile, under the card rule 'every row accepts use the recommended default' (operator clarify timed out; override still allowed before fab)",
+  "region": {
+    "value": "EU",
+    "evidence": "TollGate firmware pins the regulatory domain via esp_wifi_set_country_code(\"DE\"); SilentLink SIM is EU-issued",
+    "effect": "SIM7600E (EU bands), not SIM7600A (Americas)"
+  },
+  "decisions": {
+    "D1": {
+      "part": "ESP32-S3-WROOM-1-N16R8",
+      "flash_psram": "16 MB flash / 8 MB PSRAM",
+      "footprint": "castellated WROOM-1 (production) + 2x18 2.54 mm header mirroring ESP32-S3-DevKitC-1 (prototype)",
+      "path_select": "0 ohm / solder-bridge strapping; identical nets and firmware on both builds",
+      "reserved": ["GPIO19", "GPIO20"],
+      "avoid_for_peripherals": ["GPIO0", "GPIO3", "GPIO45", "GPIO46", "GPIO39", "GPIO40", "GPIO41", "GPIO42"]
+    },
+    "D2": {
+      "part": "SIM7600E",
+      "class": "LTE Cat-4 bare SMD",
+      "region": "EU",
+      "bands": ["B1", "B3", "B7", "B8", "B20"],
+      "prototype_path": "2x10 2.54 mm header carrying a SIM7600E breakout on the same UART/PWRKEY/RST/STATUS nets",
+      "supporting_parts": ["U.FL antenna pad", "nano-SIM holder", ">=470 uF low-ESR bulk at module"],
+      "alternate_not_chosen": "SIM7080G (Cat-M1/NB-IoT)"
+    },
+    "D3": {
+      "part": "ATGM336H-5N",
+      "form": "bare SMD",
+      "antenna": "external active antenna via U.FL/SMA (no integrated patch)",
+      "bus": "UART2 to ESP32-S3"
+    },
+    "D4": {
+      "part": "ICM-42688-P",
+      "axes": 6,
+      "bus": "I2C",
+      "alternate_not_chosen": "LSM6DS3TR-C; LSM9DS1 (9-axis, only if heading enters CTG-9 scope)"
+    },
+    "D5": {
+      "input": "12 V automotive",
+      "ride_through_v": [6, 18],
+      "protection": [
+        "2 A fuse/PTC",
+        "reverse polarity (LM74610 ideal-diode + N-FET or P-MOSFET high side)",
+        "load-dump TVS (SMBJ/SMCJ 24-33 V class, ISO 7637-2)",
+        "common-mode choke + pi filter + bulk cap"
+      ],
+      "rails": {"modem": "3.8 V >= 3 A (2 A LTE burst headroom)", "logic": "3.3 V @ 0.6 A"}
+    },
+    "D6": {
+      "board_mm": [80, 60],
+      "layers": 2,
+      "material": "FR-4 1.6 mm",
+      "mounting": "4x M3 corner holes, 3.5 mm from edge",
+      "enclosure": "not in scope for this card"
+    },
+    "D7": {
+      "extra_interfaces": [],
+      "rejected_interfaces": ["CAN", "RS232", "SD", "RTC"],
+      "note": "a CAN bus would be a v2 respin with its own card, not a silent addition"
+    }
+  },
+  "rejected": [
+    {"item": "SIM800/SIM900 2G modem", "reason": "EOL in the EU; do not design in"},
+    {"item": "USB 5 V-only input", "reason": "vehicle-mounted hub; plan section 5 automotive protection stays in scope"},
+    {"item": "50 x 50 mm board", "reason": "cannot host WROOM-1 + SIM7600 bare SMD + DevKitC-1 2x18 header + modem socket + SIM holder with antenna keep-outs"},
+    {"item": "u-blox NEO-M8N GNSS", "reason": "plan offered ATGM336H as an equally valid alternative; cheaper and JLCPCB-stockable; no requirement demands u-blox accuracy class"},
+    {"item": "SIM7600A (Americas bands)", "reason": "region resolved to EU"}
+  ],
+  "open_questions": {
+    "q1": "D1-D7 confirmed as defaults; operator override allowed before fab",
+    "q2": "region = EU",
+    "q3": "programming path = native USB (GPIO19/20) and UART0 header pads",
+    "q4": "target repository = felixfelix-bot/car-tollgate-hardware (this repo)",
+    "q5": "EDA host = DQ05, kicad 9.0.3 from the Ubuntu 25.10 default archive; SKiDL under /usr/bin/python3"
+  },
+  "status": {
+    "netlist": "not_started",
+    "layout": "not_started",
+    "drc_erc": "not_started",
+    "gerber": "not_started",
+    "order": "not_started",
+    "toolchain_install": "not_started"
+  },
+  "human_only": [
+    "install kicad on DQ05 (sudo apt-get install kicad; agent run may do this)",
+    "place the JLCPCB order (account login + payment method + shipping address + real money)"
+  ],
+  "provenance": {
+    "decision_card": "t_eaba2c97",
+    "unblocks": "t_64d238d1",
+    "board": "car-tollgate",
+    "source_plan": "docs/PCB-DESIGN-PLAN.md",
+    "source_plan_md5": "41c53b94bc331519ffa9c39ccbc52fb3"
+  }
+}

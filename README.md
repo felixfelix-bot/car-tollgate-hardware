@@ -17,10 +17,28 @@ Board: **80 x 60 mm**, 2-layer FR-4, 1.6 mm, JLCPCB standard assembly.
 | Extras | none (no CAN/RS232/SD/RTC) | D7 |
 
 `DECISIONS.md` is the authority for every footprint choice and carries the
-rationale plus what was rejected. `docs/PCB-DESIGN-PLAN.md` is the full
-architecture, power budget (2 A LTE burst), automotive protection design, and
-JLCPCB order parameters. `docs/TOOLCHAIN.md` is the KiCad 9.0 + SKiDL setup for
-this host.
+rationale plus what was rejected. `decisions.json` is the **machine-readable**
+form of the same table — the SKiDL source (`hardware/`) reads that, not the
+Markdown — and `tools/check_decisions.py` fails if the two ever disagree.
+`docs/PCB-DESIGN-PLAN.md` is the full architecture, power budget (2 A LTE
+burst), automotive protection design, and JLCPCB order parameters.
+`docs/TOOLCHAIN.md` is the KiCad 9.0 + SKiDL setup for this host.
+
+## Verification
+
+The decision record is checked, not trusted:
+
+```bash
+python3 -m pytest tests/ -q --cov=. --cov-report=term-missing   # 10 tests, 92% coverage
+python3 tools/check_decisions.py                                # standalone gate
+```
+
+`tests/test_decisions_ledger.py` asserts the ratified tokens independently of
+both the ledger and the Markdown, that every decision has a section in
+`DECISIONS.md`, that the region carries its evidence, that the shipped design
+plan is byte-identical to the card's attachment (modulo the RATIFIED banner),
+and that no netlist/Gerber/order is claimed that was not produced. CI runs the
+same two commands (`.github/workflows/docs-contract.yml`).
 
 ## Status — honest
 
@@ -43,11 +61,14 @@ ratified so the board has a durable home that is not a scratch workspace.
 
 ```
 DECISIONS.md              ratified D1-D7 + rationale + rejected alternatives
+decisions.json            machine-readable form of the same decisions (tooling reads this)
 README.md                 this file
 docs/PCB-DESIGN-PLAN.md   architecture, power budget, protection, JLC parameters
 docs/TOOLCHAIN.md         KiCad 9.0.3 + SKiDL install and headless commands
+tests/                    docs-contract tests (ledger vs Markdown, honesty checks)
+tools/check_decisions.py  standalone gate: ledger, region, plan md5, no fake fab output
 hardware/                 SKiDL source and KiCad project (empty — next step)
-fab/                      Gerbers, BOM, CPL, ZIP for JLCPCB (empty)
+fab/                      Gerbers, BOM, CPL, ZIP for JLCPCB (empty — nothing fabricated)
 ```
 
 ## Provenance
