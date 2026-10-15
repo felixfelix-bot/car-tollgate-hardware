@@ -96,3 +96,12 @@ sha256sum ds-000347 (ICM-42688-P rev 1.8)      # 7f904aec7d6b0b4a68b5038da1c29ee
    the wheel fragment was double-escaped into a string. Split into
    `fmt_json_string` (raw text -> escaped string, NULL -> null) and
    `fmt_json_fragment` (validated JSON object, NULL -> null).
+
+## Commits
+
+* `8881755` portable contract core + register sequences (pushed, verified)
+* `39e3b93` sampling loop + host tier + 252-assertion suite (pushed, verified)
+
+Next: `tools/imu_decode.py`, the ESP32-S3 app + IDF build with an ELF, the
+cross-language header byte-parity test, wiring notes, then the 60 s self-test run
+and REPORT.md.
