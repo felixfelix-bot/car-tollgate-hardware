@@ -55,3 +55,44 @@ branch `worker-base/t_752a0d0a`.
 python3 /home/c03rad0r/tmp/icm/gen_seq.py      # field packing recomputed from the corrected packers
 sha256sum ds-000347 (ICM-42688-P rev 1.8)      # 7f904aec7d6b0b4a68b5038da1c29ee2919d895c07a1fd2c697346159e5d3fc9
 ```
+
+## Cluster 3-6 landed
+
+* `firmware/components/imu_capture/imu_logger.[ch]` — the sampling loop, HAL seam,
+  rotation, flush, drop ledger, LED/state machine.
+* `firmware/host/` — `fake_hal.[ch]` (simulated sensor with virtual time,
+  injectable FIFO loss and a known jitter), `test_imu.c` (252 assertions),
+  `selftest.c` (the 60 s capture + assertions), `Makefile`.
+* `make -C firmware test` → **252 checks, 0 failed**, built with
+  `-Wall -Wextra -Werror -Wshadow -Wconversion`.
+
+### Bugs this cluster found and fixed (each was real, not a test artefact)
+
+1. **A permanently failing sink spun forever.** `emit_frame` counted a short
+   write and returned success, so a dead volume produced an infinitely long run
+   that wrote nothing — indistinguishable from a healthy capture. Added
+   `max_consecutive_host_overruns` (default one second of samples) which ends the
+   run with `-8` and the error LED.
+2. **`first_t_us` was never set**, so every achieved rate was wrong (973.7 Hz
+   reported for a 1000 Hz capture). `note_frame` gated on `frames_written == 0`
+   but was called after the counter incremented.
+3. **The seq drop ledger was applied after the burst**, putting the gap on the
+   wrong frame. Now advanced before the burst so the first frame after the loss
+   carries both the gap and `FLAG_FIFO_OVERRUN`.
+4. **`INTF_CONFIG0` had the endianny bits inverted** (`FIFO_COUNT_ENDIAN` is
+   bit 5, `SENSOR_DATA_ENDIAN` bit 4 — not the reverse). Corrected byte is
+   `0x70`: little sensor data, little FIFO count, REC count, I2C.
+5. **The register sequences never wrote `REG_BANK_SEL`.** They carried the bank
+   in the op's `bank` field, which a driver applies implicitly; a sequence that
+   does not emit the selector cannot be audited. Now the selector is an explicit
+   write and the test rejects any entry carrying an implicit bank.
+6. **`TMST_CONFIG` was `0x0F`; the correct byte is `0x15`** (TMST_EN bit 0,
+   DELTA bit 2, TO_REGS bit 4 — bit 3 is TMST_RES and 0 means 1 us).
+7. **The C float formatter emitted `1e+03` for `1000.0`.** `%g` switches to
+   exponential once the exponent reaches the precision, so the header would not
+   have matched the Python codec's bytes. `fmt_double` now finds the shortest
+   round-tripping significant-digit count and renders it with `%.*f`.
+8. **NULL provenance was written as `"null"` rather than the JSON literal** and
+   the wheel fragment was double-escaped into a string. Split into
+   `fmt_json_string` (raw text -> escaped string, NULL -> null) and
+   `fmt_json_fragment` (validated JSON object, NULL -> null).

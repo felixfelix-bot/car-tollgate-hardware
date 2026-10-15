@@ -84,6 +84,7 @@ extern "C" {
 #define ICM_BANK_SEL_1 0x01
 #define ICM_BANK_SEL_2 0x02
 #define ICM_NO_BANK (-1)
+#define IMU_NO_BANK (-1)   /* the same sentinel: the MPU-9250 has no banks */
 
 /* Delays the datasheet (not taste) requires, in microseconds. */
 #define IMU_RESET_DELAY_ICM_US 1000      /* DEVICE_CONFIG reset, then poll RESET_DONE */

@@ -147,9 +147,16 @@ int imu_check_identity(const imu_mode_t *mode, uint8_t who_am_i, const char **ou
 
 /* ------------------------------------------------------- number formatting */
 
-/* Shortest `%.*g` that round-trips, with an integral value rendered as
- * "N.0" — the form Python's repr() produces for every value this contract
- * writes. The contract test checks this against Python repr() value by value. */
+/* Shortest decimal that round-trips, with an integral value rendered as "N.0" —
+ * the form Python's repr() produces for every value this contract writes. The
+ * cross-language test checks this against Python repr() value by value.
+ *
+ * Implementation note: this deliberately does NOT format with `%g`. `%g` falls
+ * back to exponential notation as soon as the exponent reaches the precision, so
+ * a naive shortest-precision search renders 1000.0 as "1e+03" where Python says
+ * "1000.0" — which is exactly the class of mismatch that makes two writers of
+ * "the same" file differ. Instead: find how many significant digits it takes to
+ * round-trip, then render those digits in fixed notation with `%.*f`. */
 static int fmt_double(char *out, size_t cap, double v)
 {
     if (v < 0) {
@@ -163,60 +170,106 @@ static int fmt_double(char *out, size_t cap, double v)
         memcpy(out, "0.0", 4);
         return 3;
     }
-    char buf[64];
-    int chosen = -1;
-    for (int prec = 1; prec <= 17; prec++) {
-        int n = snprintf(buf, sizeof buf, "%.*g", prec, v);
-        if (n <= 0 || (size_t)n >= sizeof buf) {
-            return -1;
+    /* shortest significant-digit count that survives a round trip */
+    int sd = 17;
+    for (int p = 1; p <= 17; p++) {
+        char probe[64];
+        int n = snprintf(probe, sizeof probe, "%.*e", p - 1, v);
+        if (n <= 0 || (size_t)n >= sizeof probe) {
+            continue;
         }
-        if (strtod(buf, NULL) == v) {
-            chosen = n;
+        if (strtod(probe, NULL) == v) {
+            sd = p;
             break;
         }
     }
-    if (chosen < 0) {
-        int n = snprintf(buf, sizeof buf, "%.17g", v);
-        if (n <= 0 || (size_t)n >= sizeof buf) {
+    /* the decimal exponent, so the digit count can be turned into decimals */
+    char sci[64];
+    if (snprintf(sci, sizeof sci, "%.*e", sd - 1, v) <= 0) {
+        return -1;
+    }
+    int exp10 = 0;
+    const char *e = strchr(sci, 'e');
+    if (e == NULL || sscanf(e + 1, "%d", &exp10) != 1) {
+        return -1;
+    }
+    /* decimals needed to show `sd` significant digits at this magnitude, never
+     * negative: a value at or above 1e12 would need none */
+    int decimals = sd - 1 - exp10;
+    if (decimals < 0) {
+        decimals = 0;
+    }
+    char buf[96];
+    int n = snprintf(buf, sizeof buf, "%.*f", decimals, v);
+    if (n <= 0 || (size_t)n >= sizeof buf) {
+        return -1;
+    }
+    /* Python always shows a decimal point on a float: 1000 -> "1000.0" */
+    if (strchr(buf, '.') == NULL) {
+        if ((size_t)n + 2 >= sizeof buf) {
             return -1;
         }
-        chosen = n;
+        buf[n] = '.';
+        buf[n + 1] = '0';
+        buf[n + 2] = '\0';
+        n += 2;
     }
-    int has_dot = strchr(buf, '.') != NULL;
-    int has_exp = strchr(buf, 'e') != NULL || strchr(buf, 'E') != NULL;
-    if (!has_dot && !has_exp) {
-        if ((size_t)chosen + 3 > cap) return -1;
-        memcpy(out, buf, (size_t)chosen);
-        out[chosen] = '.';
-        out[chosen + 1] = '0';
-        out[chosen + 2] = '\0';
-        return chosen + 2;
+    if ((size_t)n >= cap) {
+        return -1;
     }
-    if ((size_t)chosen + 1 > cap) return -1;
-    memcpy(out, buf, (size_t)chosen + 1);
-    return chosen;
+    memcpy(out, buf, (size_t)n + 1);
+    return n;
 }
 
-/* JSON string, escaping the two characters Python's json module must escape in
- * a provenance string (quote and backslash). */
+/* JSON string for a RAW C string, escaping the two characters Python's json
+ * module must escape in a provenance string (quote and backslash). A NULL input
+ * becomes the JSON literal null, because spec S5.4 requires an unknown value to
+ * be present-and-null rather than absent — "we did not know" and "we knew it was
+ * nothing" are different facts and a missing key conflates them. */
 static int fmt_json_string(char *out, size_t cap, const char *s)
 {
     size_t k = 0;
-    if (k + 1 >= cap) return -1;
+    if (cap < 8) {
+        return -1;
+    }
+    if (s == NULL) {
+        memcpy(out, "null", 5);
+        return 4;
+    }
     out[k++] = '"';
-    if (s != NULL) {
-        for (const char *p = s; *p != '\0'; p++) {
-            if (k + 2 >= cap) return -1;
-            if (*p == '"' || *p == '\\') {
-                out[k++] = '\\';
-            }
-            out[k++] = *p;
+    for (const char *p = s; *p != '\0'; p++) {
+        if (k + 2 >= cap) return -1;
+        if (*p == '"' || *p == '\\') {
+            out[k++] = '\\';
         }
+        out[k++] = *p;
     }
     if (k + 1 >= cap) return -1;
     out[k++] = '"';
     out[k] = '\0';
     return (int)k;
+}
+
+/* JSON value for an already-formed fragment (the wheel object). Accepts a raw
+ * object literal or a NULL; refuses anything else, so a caller cannot smuggle
+ * unescaped text into the header through the fragment path. */
+static int fmt_json_fragment(char *out, size_t cap, const char *frag, const char *what)
+{
+    (void)what;
+    if (frag == NULL) {
+        if (cap < 8) return -1;
+        memcpy(out, "null", 5);
+        return 4;
+    }
+    size_t n = strlen(frag);
+    if (n == 0 || n + 1 > cap) {
+        return -1;
+    }
+    if (frag[0] != '{' && frag[0] != '[' && strcmp(frag, "null") != 0) {
+        return -1; /* not a JSON fragment: escaping it would be a silent lie */
+    }
+    memcpy(out, frag, n + 1);
+    return (int)n;
 }
 
 /* ------------------------------------------------------------- header JSON */
@@ -240,8 +293,7 @@ int imu_header_json(const imu_mode_t *mode, const char *device_id, uint64_t star
         fmt_json_string(mount, sizeof mount, mounting) < 0 ||
         fmt_json_string(veh, sizeof veh, vehicle) < 0 ||
         fmt_json_string(fw, sizeof fw, firmware_rev) < 0 ||
-        fmt_json_string(wheel, sizeof wheel,
-                        wheel_json != NULL ? wheel_json : "null") < 0) {
+        fmt_json_fragment(wheel, sizeof wheel, wheel_json, "wheel") < 0) {
         return -1;
     }
     char odr[64], band[64], dband[64], sa[64], sg[64], gfsr[64];
