@@ -24,3 +24,6 @@ __pycache__/
 .coverage
 .pytest_cache/
 *.pyc
+
+# scratch smoke scripts
+.smoke*.py
