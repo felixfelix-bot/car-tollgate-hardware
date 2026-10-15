@@ -1,0 +1,1 @@
+OK: imu_capture spec v2.1, 24-byte frames, round trip clean

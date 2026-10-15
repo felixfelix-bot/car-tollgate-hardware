@@ -1,0 +1,1 @@
+OK: decisions.json agrees with DECISIONS.md, plan md5 matches, no fabricated fab output

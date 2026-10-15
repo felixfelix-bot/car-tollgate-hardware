@@ -1,0 +1,26 @@
+=== 1. codec self-check ===
+OK: imu_capture spec v2.1, 24-byte frames, round trip clean
+
+=== 2. modes / parts / bus speeds ===
+  mode A:   4000 Hz  band   500 Hz  ICM-42688-P who_am_i 0x47  I2C 1000 kHz
+  mode B:   2000 Hz  band   250 Hz  ICM-42688-P who_am_i 0x47  I2C 1000 kHz
+  mode M:   1000 Hz  band   150 Hz  MPU-9250    who_am_i 0x71  I2C 400 kHz
+
+=== 3. identity guard ===
+  mode A: accepts ICM-42688-P, refuses the other -> mode 'A' requires ICM-42688-P (WHO_AM_I 0x47) but the device answered 0x...
+  mode B: accepts ICM-42688-P, refuses the other -> mode 'B' requires ICM-42688-P (WHO_AM_I 0x47) but the device answered 0x...
+  mode M: accepts MPU-9250, refuses the other -> mode 'M' requires MPU-9250 (WHO_AM_I 0x71) but the device answered 0x47 ...
+
+=== 4. real mode-M capture round trip (1 s, injected 1x imbalance) ===
+  frames 1000  mode M  device MPU-9250  who_am_i 0x71  band 150 Hz
+  achieved_fs 1000.000 Hz  duration 0.999 s  dropped 0  overruns 0
+  size on disk 0 B (header + 1000 x 24 = 24000 B frames)
+
+=== 5. the recovered tone is at the injected frequency ===
+  peak 15.000 Hz (injected 14.740), bin width 1.000 Hz, amplitude 0.4674 m/s^2
+
+=== 6. mode A is the carrier part only, by construction ===
+  mode A refuses 0x71 (the MPU-9250) as required
+  mode A needs I2C 1000 kHz; the MPU-9250's ceiling is 400 kHz -> not reachable on the bench part
+
+ALL ACCEPTANCE CHECKS PASSED
